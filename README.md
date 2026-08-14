@@ -46,6 +46,9 @@ Hyprland itself, plus whatever each piece needs:
 - **grim**, **slurp**, **wl-copy** (wl-clipboard) — screenshots and clipboard.
 - **jq** — JSON plumbing.
 - **kitty**, **fish** — the terminal and shell these configs are actually for.
+- **Docker** — only needed at install time, to build `quickshell-git` without
+  risking the host (see `bootstrap.sh` below). Not needed to run any of this
+  afterward.
 
 Dynamic Island lists its own requirements separately — see
 [`hypr/scripts/quickshell/dynamic-island/README.md`](hypr/scripts/quickshell/dynamic-island/README.md)
@@ -70,10 +73,18 @@ wget -qO- https://raw.githubusercontent.com/lunanoir21/aether-dotfiles/main/boot
 `bootstrap.sh` checks `/etc/os-release` and refuses to run on anything that
 isn't Arch (or Arch-based) rather than half-installing and leaving a mess.
 On Arch it installs Hyprland and every package this rice needs via pacman,
-builds `yay` from the AUR if no AUR helper is present yet (Quickshell only
-ships as an AUR package), installs `quickshell-git`, clones this repo to
+builds `yay` from the AUR for later use, clones this repo to
 `~/aether-dotfiles`, and runs `install.sh`. Safe to re-run — every step is
 `--needed`/idempotent.
+
+`quickshell-git` itself is built inside a memory-capped Docker container
+rather than directly on the host — its Qt6 compile is heavy enough to eat
+all available RAM+swap and lock up the whole machine while it does, not
+just fail. Capped inside a container (default 6G, override with
+`DOCKER_BUILD_MEM=8g`), a build that outgrows the cap fails cleanly inside
+that container instead; the host never notices. The result is a real
+`.pkg.tar.zst`, installed on the host with `pacman -U` once the container
+build finishes.
 
 ### Already have the packages, just want the configs
 

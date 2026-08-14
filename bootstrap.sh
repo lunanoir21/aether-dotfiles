@@ -4,14 +4,17 @@
 #   curl -fsSL https://raw.githubusercontent.com/lunanoir21/aether-dotfiles/main/bootstrap.sh | bash
 #
 # Installs Hyprland and everything this rice needs, builds an AUR helper if
-# there isn't one (Quickshell only ships as an AUR package), clones this repo,
-# and runs install.sh to symlink the configs into place. Idempotent — safe to
-# run again on a box that already has some of this.
+# there isn't one (for the user's own later use — nothing here strictly
+# needs it), clones this repo, and runs install.sh to symlink the configs
+# into place. Idempotent — safe to run again on a box that already has some
+# of this.
 #
-# Before building anything from source, it also caps parallel build jobs by
-# available RAM and adds a swapfile if there's none — quickshell-git's Qt6
-# compile is heavy enough to OOM-kill on plenty of real machines otherwise,
-# not just tight VMs.
+# quickshell-git itself builds inside a memory-capped Docker container
+# instead of directly on the host: its Qt6 compile is heavy enough to eat
+# all available RAM+swap and lock up the whole desktop while it does, not
+# just fail cleanly. Capped inside a container, a build that runs out of
+# room just fails inside that container — the host, and whatever else is
+# running on it (including Boxes/VMs), never even notices.
 set -euo pipefail
 
 log() { printf '\n\033[1;32m==>\033[0m %s\n' "$1"; }
@@ -37,7 +40,7 @@ command -v sudo >/dev/null 2>&1 || die "sudo not found — install it first (as 
 # ------------------------------------------------------------- pacman deps
 log "Installing packages from the official repos"
 sudo pacman -Syu --needed --noconfirm \
-    git base-devel \
+    git base-devel docker \
     hyprland hypridle xdg-desktop-portal-hyprland \
     kitty fish \
     cava playerctl wireplumber pipewire pipewire-pulse \
@@ -45,99 +48,80 @@ sudo pacman -Syu --needed --noconfirm \
     ttf-iosevka-nerd qt6-declarative qt6-svg qt6-imageformats \
     polkit-gnome
 
-# ------------------------------------------------------- build headroom
-# quickshell-git compiles Qt6 with LTO, and its precompiled-header targets
-# are heavy enough that the default -j$(nproc) OOM-kills cc1plus even on
-# 8G boxes when a couple of PCH targets build in parallel — this isn't a
-# rare misconfiguration, it's the default outcome on a lot of VMs. Two
-# safety nets: cap parallel build jobs by available RAM so it doesn't get
-# into that state, and make sure there's swap as a fallback in case it
-# still runs tight (a lot of fresh installs/VMs simply have none).
-ensure_build_swap() {
-    local swap_kb mem_kb mem_gb
-    swap_kb=$(awk '/SwapTotal/ {print $2}' /proc/meminfo)
-    if [[ "$swap_kb" -gt 0 ]]; then
-        log "Swap already active ($((swap_kb / 1024 / 1024))G) — leaving it alone"
-        return
-    fi
-    mem_kb=$(awk '/MemTotal/ {print $2}' /proc/meminfo)
-    mem_gb=$((mem_kb / 1024 / 1024))
-    if [[ "$mem_gb" -ge 16 ]]; then
-        log "No swap, but ${mem_gb}G RAM is plenty for this build — skipping"
-        return
-    fi
-    log "No swap and only ${mem_gb}G RAM — adding an 8G swapfile so the Qt6 build has somewhere to go instead of getting OOM-killed"
-    sudo fallocate -l 8G /swapfile
-    sudo chmod 600 /swapfile
-    sudo mkswap /swapfile >/dev/null
-    sudo swapon /swapfile
-    grep -q '^/swapfile ' /etc/fstab 2>/dev/null || echo '/swapfile none swap defaults 0 0' | sudo tee -a /etc/fstab >/dev/null
-}
-
-build_jobs() {
-    local mem_gb jobs cores
-    mem_gb=$(( $(awk '/MemTotal/ {print $2}' /proc/meminfo) / 1024 / 1024 ))
-    cores="$(nproc)"
-    # Roughly one job per 2G of RAM is what actually keeps quickshell's
-    # Qt6 PCH compiles from OOMing in the first place — the swapfile above
-    # is just the fallback if this estimate is still too optimistic.
-    jobs=$(( mem_gb / 2 ))
-    [[ "$jobs" -ge 1 ]] || jobs=1
-    [[ "$jobs" -le "$cores" ]] || jobs="$cores"
-    echo "$jobs"
-}
-
-# `export MAKEFLAGS` alone does NOT reach the actual compile step: makepkg
-# sources /etc/makepkg.conf, which sets its own MAKEFLAGS="-j$(nproc)" and
-# clobbers whatever was exported before it runs — so the cap above never
-# actually applied. Editing makepkg.conf itself is the only way it sticks.
-# Also drops `lto` from OPTIONS there: link-time optimisation raises peak
-# memory per translation unit further still, on top of the parallelism.
-patch_makepkg_conf() {
-    local jobs="$1"
-    log "Setting MAKEFLAGS=-j${jobs} and disabling LTO in /etc/makepkg.conf (both raise the Qt6 build's peak memory otherwise)"
-    if grep -qE '^MAKEFLAGS=' /etc/makepkg.conf; then
-        sudo sed -i -E "s/^MAKEFLAGS=.*/MAKEFLAGS=\"-j${jobs}\"/" /etc/makepkg.conf
-    else
-        echo "MAKEFLAGS=\"-j${jobs}\"" | sudo tee -a /etc/makepkg.conf >/dev/null
-    fi
-    # Rewrite the OPTIONS array via bash itself instead of a regex, so a
-    # bare "lto" only flips to "!lto" and an existing "!lto" is left alone
-    # — a word-boundary sed can't tell those two apart reliably.
-    if grep -qE '^OPTIONS=' /etc/makepkg.conf; then
-        local rewritten
-        rewritten="$(
-            source /etc/makepkg.conf
-            new=()
-            for opt in "${OPTIONS[@]}"; do
-                [[ "$opt" == "lto" ]] && opt="!lto"
-                new+=("$opt")
-            done
-            printf 'OPTIONS=(%s)' "${new[*]}"
-        )"
-        sudo sed -i -E "s/^OPTIONS=\(.*\)\$/${rewritten}/" /etc/makepkg.conf
-    fi
-}
-
-ensure_build_swap
-patch_makepkg_conf "$(build_jobs)"
+log "Starting the Docker daemon"
+sudo systemctl enable --now docker.service
 
 # ------------------------------------------------------------- AUR helper
-# Quickshell has no official-repo package; everything downstream needs an
-# AUR helper regardless, so this bootstraps yay-bin (prebuilt, so it doesn't
-# also need to compile go from source) if one isn't already on the system.
+# Nothing else in this script needs an AUR helper (quickshell-git builds in
+# Docker below), but the user will want one eventually on a fresh Arch box,
+# so bootstrap yay-bin now while it's cheap — it ships prebuilt, so this is
+# a git clone and a package install, not a compile.
 if ! command -v yay >/dev/null 2>&1 && ! command -v paru >/dev/null 2>&1; then
-    log "No AUR helper found — building yay-bin"
+    log "No AUR helper found — installing yay-bin"
     tmp="$(mktemp -d)"
     git clone --depth 1 https://aur.archlinux.org/yay-bin.git "$tmp/yay-bin"
     (cd "$tmp/yay-bin" && makepkg -si --noconfirm)
     rm -rf "$tmp"
 fi
-AUR_HELPER="$(command -v yay || command -v paru)"
 
 # ------------------------------------------------------------------ quickshell
-log "Installing Quickshell (AUR)"
-"$AUR_HELPER" -S --needed --noconfirm quickshell-git
+# Built inside Docker with a hard memory cap (--memory-swap equal to
+# --memory means no swap headroom either, so a build that outgrows the
+# cap gets OOM-killed *inside the container* right away instead of
+# dragging the host into swap and taking the desktop down with it — which
+# is exactly what happened building this directly on the host: even an
+# 8G/16-core VM would lock up and crash GNOME Boxes along with everything
+# else on the machine). Builds a real .pkg.tar.zst, then installs that on
+# the host with pacman -U — the AUR helper above is never involved here.
+build_quickshell_in_docker() {
+    local mem_limit jobs out_dir script
+    mem_limit="${DOCKER_BUILD_MEM:-6g}"
+    jobs=$(( ${mem_limit%g} / 2 ))
+    [[ "$jobs" -ge 1 ]] || jobs=1
+
+    log "Building quickshell-git in a ${mem_limit}-capped Docker container (MAKEFLAGS=-j${jobs})"
+
+    out_dir="$(mktemp -d)"
+    script="$(mktemp)"
+    cat > "$script" <<BUILD
+#!/usr/bin/env bash
+set -euo pipefail
+pacman -Sy --noconfirm --needed git base-devel qt6-declarative qt6-svg qt6-imageformats cmake ninja pipewire jemalloc
+sed -i -E 's/^MAKEFLAGS=.*/MAKEFLAGS="-j${jobs}"/' /etc/makepkg.conf
+grep -q '^MAKEFLAGS=' /etc/makepkg.conf || echo 'MAKEFLAGS="-j${jobs}"' >> /etc/makepkg.conf
+useradd -m builder
+echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+su - builder -c '
+    set -e
+    git clone --depth 1 https://aur.archlinux.org/quickshell-git.git ~/pkg
+    cd ~/pkg
+    makepkg -s --noconfirm
+    cp -- *.pkg.tar.* /out/
+'
+BUILD
+    chmod +x "$script"
+
+    # sudo rather than the docker group: group membership only takes effect
+    # on a new login session, which a one-shot script never gets.
+    sudo docker run --rm \
+        --memory="$mem_limit" --memory-swap="$mem_limit" \
+        -v "$out_dir:/out" \
+        -v "$script:/build.sh:ro" \
+        archlinux:base-devel \
+        bash /build.sh
+    rm -f "$script"
+
+    [[ -n "$(ls -A "$out_dir" 2>/dev/null)" ]] || die "Docker build produced no package — check the container output above (DOCKER_BUILD_MEM=8g bash bootstrap.sh to raise the memory cap)."
+    log "Installing the built quickshell-git package on the host"
+    sudo pacman -U --noconfirm "$out_dir"/*.pkg.tar.*
+    rm -rf "$out_dir"
+}
+
+if pacman -Qi quickshell-git >/dev/null 2>&1; then
+    log "quickshell-git already installed — skipping the Docker build"
+else
+    build_quickshell_in_docker
+fi
 
 # ------------------------------------------------------------------- clone
 DOTFILES_DIR="${AETHER_DOTFILES_DIR:-$HOME/aether-dotfiles}"
