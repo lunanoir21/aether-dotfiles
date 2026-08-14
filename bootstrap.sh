@@ -87,9 +87,40 @@ build_jobs() {
     echo "$jobs"
 }
 
+# `export MAKEFLAGS` alone does NOT reach the actual compile step: makepkg
+# sources /etc/makepkg.conf, which sets its own MAKEFLAGS="-j$(nproc)" and
+# clobbers whatever was exported before it runs — so the cap above never
+# actually applied. Editing makepkg.conf itself is the only way it sticks.
+# Also drops `lto` from OPTIONS there: link-time optimisation raises peak
+# memory per translation unit further still, on top of the parallelism.
+patch_makepkg_conf() {
+    local jobs="$1"
+    log "Setting MAKEFLAGS=-j${jobs} and disabling LTO in /etc/makepkg.conf (both raise the Qt6 build's peak memory otherwise)"
+    if grep -qE '^MAKEFLAGS=' /etc/makepkg.conf; then
+        sudo sed -i -E "s/^MAKEFLAGS=.*/MAKEFLAGS=\"-j${jobs}\"/" /etc/makepkg.conf
+    else
+        echo "MAKEFLAGS=\"-j${jobs}\"" | sudo tee -a /etc/makepkg.conf >/dev/null
+    fi
+    # Rewrite the OPTIONS array via bash itself instead of a regex, so a
+    # bare "lto" only flips to "!lto" and an existing "!lto" is left alone
+    # — a word-boundary sed can't tell those two apart reliably.
+    if grep -qE '^OPTIONS=' /etc/makepkg.conf; then
+        local rewritten
+        rewritten="$(
+            source /etc/makepkg.conf
+            new=()
+            for opt in "${OPTIONS[@]}"; do
+                [[ "$opt" == "lto" ]] && opt="!lto"
+                new+=("$opt")
+            done
+            printf 'OPTIONS=(%s)' "${new[*]}"
+        )"
+        sudo sed -i -E "s/^OPTIONS=\(.*\)\$/${rewritten}/" /etc/makepkg.conf
+    fi
+}
+
 ensure_build_swap
-export MAKEFLAGS="-j$(build_jobs)"
-log "Building with MAKEFLAGS=$MAKEFLAGS (capped by available RAM, not core count, to avoid OOM during Qt6 compilation)"
+patch_makepkg_conf "$(build_jobs)"
 
 # ------------------------------------------------------------- AUR helper
 # Quickshell has no official-repo package; everything downstream needs an
