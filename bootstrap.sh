@@ -42,13 +42,26 @@ command -v sudo >/dev/null 2>&1 || die "sudo not found — install it first (as 
 # ------------------------------------------------------------- pacman deps
 log "Installing packages from the official repos"
 sudo pacman -Syu --needed --noconfirm \
-    git base-devel docker \
+    git base-devel docker cmake \
     hyprland hypridle xdg-desktop-portal-hyprland \
     kitty fish \
     cava playerctl wireplumber pipewire pipewire-pulse \
     wl-clipboard grim slurp jq brightnessctl \
     ttf-iosevka-nerd qt6-declarative qt6-svg qt6-imageformats \
     polkit-gnome
+
+# ------------------------------------------------------ hyprexpo plugin
+# Powers the SUPER+TAB all-workspaces overview in hyprland.conf. hyprpm
+# builds it against the installed Hyprland's headers, so this has to run
+# after Hyprland itself is in (above) — cmake is the only extra build
+# dependency it needs beyond base-devel.
+if ! hyprpm list 2>/dev/null | grep -q hyprexpo; then
+    log "Adding and enabling the hyprexpo plugin (SUPER+TAB workspace overview)"
+    hyprpm add https://github.com/hyprwm/hyprland-plugins
+    hyprpm enable hyprexpo
+else
+    log "hyprexpo already enabled — skipping"
+fi
 
 log "Starting the Docker daemon"
 sudo systemctl enable --now docker.service

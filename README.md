@@ -2,10 +2,14 @@
 
 My Hyprland desktop, being rebuilt from scratch — kitty for the terminal,
 fish for the shell, and [Dynamic Island](hypr/scripts/quickshell/dynamic-island)
-as the one Quickshell widget carried over from the previous setup. Everything
-else (panels, other widgets, colours) is intentionally not here yet: it's
-being redesigned, not migrated. Structured to mirror `~/.config` directly, so
-nothing here needs translating to figure out where it actually lives.
+as the one Quickshell widget carried over from the previous setup. Every
+other widget/panel is intentionally not here yet: it's being redesigned,
+not migrated. Structured to mirror `~/.config` directly, so nothing here
+needs translating to figure out where it actually lives.
+
+SUPER+TAB opens an all-workspaces overview (the [hyprexpo](https://github.com/hyprwm/hyprland-plugins)
+plugin, bootstrapped automatically); bare SUPER still opens/closes Dynamic
+Island.
 
 ## What's in it
 
@@ -29,9 +33,10 @@ aether-dotfiles/
 │                            (TopBar, Dock, Lock, battery, network, wallpaper…)
 │                            was removed on purpose — they're being rebuilt,
 │                            not brought along.
-├── kitty/                  Terminal config, no colour scheme wired in yet —
-│                            that was matugen-generated before and is being
-│                            redone from scratch, not reconnected
+├── kitty/                  Terminal config — cursor trail, background blur,
+│                            and a hand-picked greyscale palette that reuses
+│                            Dynamic Island's status green/red/amber as the
+│                            only saturated colour (no matugen)
 └── fish/                   Shell config (not fish_variables — that's per-machine state,
                               regenerates itself, see .gitignore)
 ```
