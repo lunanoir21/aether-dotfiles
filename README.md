@@ -19,9 +19,9 @@ aether-dotfiles/
 │   ├── config/             autostart, env, keybindings, monitors, rules, variables
 │   ├── templates/          Source templates the config/ files are generated from
 │   ├── scripts/            Helper scripts (workspaces, screenshots, locking…) —
-│   │                        a few (matugen_cmd.sh, the wallpaper-reload path)
-│   │                        still reference the old widget setup and need
-│   │                        rewriting alongside it, not before
+│   │                        matugen is gone from all of them; the wallpaper
+│   │                        picker (init.sh) still sets the wallpaper itself,
+│   │                        just without generating a colour scheme from it
 │   └── scripts/quickshell/ Deliberately just the one thing:
 │       └── dynamic-island/ A macOS-style Dynamic Island for Hyprland — its own
 │                            project, own README, own git history. Included here
