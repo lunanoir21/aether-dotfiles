@@ -53,8 +53,32 @@ once the submodule is checked out.
 
 ## Install
 
+### Fresh Arch Linux box (VM, new install, whatever)
+
+One line, run as your normal user (not root):
+
 ```bash
-git clone --recurse-submodules <this repo> ~/aether-dotfiles
+curl -fsSL https://raw.githubusercontent.com/lunanoir21/aether-dotfiles/main/bootstrap.sh | bash
+```
+
+or with wget:
+
+```bash
+wget -qO- https://raw.githubusercontent.com/lunanoir21/aether-dotfiles/main/bootstrap.sh | bash
+```
+
+`bootstrap.sh` checks `/etc/os-release` and refuses to run on anything that
+isn't Arch (or Arch-based) rather than half-installing and leaving a mess.
+On Arch it installs Hyprland and every package this rice needs via pacman,
+builds `yay` from the AUR if no AUR helper is present yet (Quickshell only
+ships as an AUR package), installs `quickshell-git`, clones this repo to
+`~/aether-dotfiles`, and runs `install.sh`. Safe to re-run — every step is
+`--needed`/idempotent.
+
+### Already have the packages, just want the configs
+
+```bash
+git clone --recurse-submodules https://github.com/lunanoir21/aether-dotfiles.git ~/aether-dotfiles
 cd ~/aether-dotfiles
 ./install.sh
 ```
