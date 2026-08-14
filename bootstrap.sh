@@ -3,20 +3,17 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/lunanoir21/aether-dotfiles/main/bootstrap.sh | bash
 #
-# Installs Hyprland and everything this rice needs, builds an AUR helper if
-# there isn't one (Quickshell only ships as an AUR package — quickshell-git,
-# no plain "quickshell" exists, and Chaotic-AUR doesn't carry it either, so
-# there's no prebuilt-binary shortcut here), clones this repo, and runs
-# install.sh to symlink the configs into place. Idempotent — safe to run
-# again on a box that already has some of this.
+# Installs Hyprland and everything this rice needs, builds an AUR helper for
+# later use (yay-bin — nothing here strictly needs it itself), clones this
+# repo, and runs install.sh to symlink the configs into place. Idempotent —
+# safe to run again on a box that already has some of this.
 #
-# quickshell-git itself builds inside a memory-capped Docker container
-# instead of directly on the host: its Qt6 compile is heavy enough to eat
-# all available RAM+swap and lock up the whole desktop while it does — that
-# took down GNOME Boxes (and every VM running alongside it) the first time
-# this ran directly on the host. Capped inside a container, a build that
-# runs out of room just fails inside that container instead; the host
-# never even notices.
+# Does NOT install quickshell-git. It's AUR-only (no plain "quickshell", and
+# Chaotic-AUR doesn't carry the -git package either), and its Qt6 compile is
+# heavy enough to have locked up an 8G/16-core box outright the one time this
+# script tried to build it automatically — not something worth doing
+# unattended inside a one-liner. Install it yourself when ready:
+#   yay -S quickshell-git
 set -euo pipefail
 
 log() { printf '\n\033[1;32m==>\033[0m %s\n' "$1"; }
@@ -42,7 +39,7 @@ command -v sudo >/dev/null 2>&1 || die "sudo not found — install it first (as 
 # ------------------------------------------------------------- pacman deps
 log "Installing packages from the official repos"
 sudo pacman -Syu --needed --noconfirm \
-    git base-devel docker cmake \
+    git base-devel cmake \
     hyprland hypridle xdg-desktop-portal-hyprland \
     kitty fish \
     cava playerctl wireplumber pipewire pipewire-pulse \
@@ -50,86 +47,25 @@ sudo pacman -Syu --needed --noconfirm \
     ttf-iosevka-nerd qt6-declarative qt6-svg qt6-imageformats \
     polkit-gnome
 
-# The hyprexpo plugin (SUPER+TAB workspace overview) is NOT set up here:
-# hyprpm needs HYPRLAND_INSTANCE_SIGNATURE to detect the running Hyprland's
-# version before it can add/build anything against it — "are you running
-# hyprland?" is a hard failure, not a warning, on a box that's never
-# started Hyprland yet, which is exactly the state this script runs in.
-# hyprland.conf's own exec-once handles it instead, the first time a real
-# session actually starts (see the AUTOSTART section's exec-once there).
-# cmake is installed above so that step has what it needs when it runs.
-
-log "Starting the Docker daemon"
-sudo systemctl enable --now docker.service
+# cmake above is for hyprpm, not quickshell — it needs it to build the
+# hyprexpo plugin (SUPER+TAB workspace overview). That step itself isn't
+# run here: hyprpm needs a live HYPRLAND_INSTANCE_SIGNATURE to detect the
+# running Hyprland's version before it can add/build anything against it,
+# which a box that's never started Hyprland yet doesn't have. See
+# hyprland.conf's own exec-once in its AUTOSTART section instead — it adds
+# and enables hyprexpo the first time a real session actually starts.
 
 # ------------------------------------------------------------- AUR helper
-# Nothing else in this script needs an AUR helper (quickshell-git builds in
-# Docker below), but the user will want one eventually on a fresh Arch box,
-# so bootstrap yay-bin now while it's cheap — it ships prebuilt, so this is
-# a git clone and a package install, not a compile.
+# Nothing in this script needs an AUR helper itself, but the user will want
+# one eventually on a fresh Arch box (quickshell-git included — see the top
+# of this file), so bootstrap yay-bin now while it's cheap: it ships
+# prebuilt, so this is a git clone and a package install, not a compile.
 if ! command -v yay >/dev/null 2>&1 && ! command -v paru >/dev/null 2>&1; then
     log "No AUR helper found — installing yay-bin"
     tmp="$(mktemp -d)"
     git clone --depth 1 https://aur.archlinux.org/yay-bin.git "$tmp/yay-bin"
     (cd "$tmp/yay-bin" && makepkg -si --noconfirm)
     rm -rf "$tmp"
-fi
-
-# ------------------------------------------------------------------ quickshell
-# Built inside Docker with a hard memory cap (--memory-swap equal to
-# --memory means no swap headroom either, so a build that outgrows the
-# cap gets OOM-killed *inside the container* right away instead of
-# dragging the host into swap and taking the desktop down with it). Builds
-# a real .pkg.tar.zst, then installs that on the host with pacman -U — the
-# AUR helper above is never involved here.
-build_quickshell_in_docker() {
-    local mem_limit jobs out_dir script
-    mem_limit="${DOCKER_BUILD_MEM:-6g}"
-    jobs=$(( ${mem_limit%g} / 2 ))
-    [[ "$jobs" -ge 1 ]] || jobs=1
-
-    log "Building quickshell-git in a ${mem_limit}-capped Docker container (MAKEFLAGS=-j${jobs})"
-
-    out_dir="$(mktemp -d)"
-    script="$(mktemp)"
-    cat > "$script" <<BUILD
-#!/usr/bin/env bash
-set -euo pipefail
-pacman -Sy --noconfirm --needed git base-devel qt6-declarative qt6-svg qt6-imageformats cmake ninja pipewire jemalloc
-sed -i -E 's/^MAKEFLAGS=.*/MAKEFLAGS="-j${jobs}"/' /etc/makepkg.conf
-grep -q '^MAKEFLAGS=' /etc/makepkg.conf || echo 'MAKEFLAGS="-j${jobs}"' >> /etc/makepkg.conf
-useradd -m builder
-echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
-su - builder -c '
-    set -e
-    git clone --depth 1 https://aur.archlinux.org/quickshell-git.git ~/pkg
-    cd ~/pkg
-    makepkg -s --noconfirm
-    cp -- *.pkg.tar.* /out/
-'
-BUILD
-    chmod +x "$script"
-
-    # sudo rather than the docker group: group membership only takes effect
-    # on a new login session, which a one-shot script never gets.
-    sudo docker run --rm \
-        --memory="$mem_limit" --memory-swap="$mem_limit" \
-        -v "$out_dir:/out" \
-        -v "$script:/build.sh:ro" \
-        archlinux:base-devel \
-        bash /build.sh
-    rm -f "$script"
-
-    [[ -n "$(ls -A "$out_dir" 2>/dev/null)" ]] || die "Docker build produced no package — check the container output above (DOCKER_BUILD_MEM=8g bash bootstrap.sh to raise the memory cap)."
-    log "Installing the built quickshell-git package on the host"
-    sudo pacman -U --noconfirm "$out_dir"/*.pkg.tar.*
-    rm -rf "$out_dir"
-}
-
-if pacman -Qi quickshell-git >/dev/null 2>&1; then
-    log "quickshell-git already installed — skipping the Docker build"
-else
-    build_quickshell_in_docker
 fi
 
 # ------------------------------------------------------------------- clone
@@ -147,5 +83,6 @@ log "Symlinking configs into ~/.config"
 "$DOTFILES_DIR/install.sh"
 
 log "Done"
+echo "Install quickshell-git yourself when ready: yay -S quickshell-git"
 echo "Log out and pick Hyprland at your display manager, or start it from a"
 echo "TTY with: Hyprland"
