@@ -8,6 +8,16 @@
 #
 # Anything already at the destination gets moved aside with a timestamp
 # suffix rather than overwritten, so a first run never loses real config.
+#
+# ONE EXCEPTION worth knowing before running this against a live setup:
+# hypr/scripts IS linked as a whole directory (not per-file, there are too
+# many). Its scripts/quickshell/ subfolder currently holds only
+# dynamic-island/ — every other widget (TopBar, Dock, Lock, battery,
+# network, wallpaper…) was deliberately removed here because they're being
+# rebuilt from scratch, not migrated. Running this on a machine that still
+# has the old widgets live will replace scripts/quickshell/ with this
+# trimmed-down version and take those widgets down. Fine on a fresh
+# install; not something to run yet on top of an existing working setup.
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,13 +28,11 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 LINKS=(
     "hypr/hyprland.conf:hypr/hyprland.conf"
     "hypr/hypridle.conf:hypr/hypridle.conf"
-    "hypr/colors.conf:hypr/colors.conf"
     "hypr/settings.json:hypr/settings.json"
     "hypr/config:hypr/config"
     "hypr/templates:hypr/templates"
     "hypr/scripts:hypr/scripts"
     "kitty/kitty.conf:kitty/kitty.conf"
-    "kitty/kitty-matugen-colors.conf:kitty/kitty-matugen-colors.conf"
     "fish/config.fish:fish/config.fish"
 )
 
