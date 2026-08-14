@@ -50,18 +50,14 @@ sudo pacman -Syu --needed --noconfirm \
     ttf-iosevka-nerd qt6-declarative qt6-svg qt6-imageformats \
     polkit-gnome
 
-# ------------------------------------------------------ hyprexpo plugin
-# Powers the SUPER+TAB all-workspaces overview in hyprland.conf. hyprpm
-# builds it against the installed Hyprland's headers, so this has to run
-# after Hyprland itself is in (above) — cmake is the only extra build
-# dependency it needs beyond base-devel.
-if ! hyprpm list 2>/dev/null | grep -q hyprexpo; then
-    log "Adding and enabling the hyprexpo plugin (SUPER+TAB workspace overview)"
-    hyprpm add https://github.com/hyprwm/hyprland-plugins
-    hyprpm enable hyprexpo
-else
-    log "hyprexpo already enabled — skipping"
-fi
+# The hyprexpo plugin (SUPER+TAB workspace overview) is NOT set up here:
+# hyprpm needs HYPRLAND_INSTANCE_SIGNATURE to detect the running Hyprland's
+# version before it can add/build anything against it — "are you running
+# hyprland?" is a hard failure, not a warning, on a box that's never
+# started Hyprland yet, which is exactly the state this script runs in.
+# hyprland.conf's own exec-once handles it instead, the first time a real
+# session actually starts (see the AUTOSTART section's exec-once there).
+# cmake is installed above so that step has what it needs when it runs.
 
 log "Starting the Docker daemon"
 sudo systemctl enable --now docker.service
