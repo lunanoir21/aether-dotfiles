@@ -46,6 +46,9 @@ Hyprland itself, plus whatever each piece needs:
 - **grim**, **slurp**, **wl-copy** (wl-clipboard) — screenshots and clipboard.
 - **jq** — JSON plumbing.
 - **kitty**, **fish** — the terminal and shell these configs are actually for.
+- **Docker** — only needed at install time, to build `quickshell-git` without
+  risking the host (see `bootstrap.sh` below). Not needed to run any of this
+  afterward.
 
 Dynamic Island lists its own requirements separately — see
 [`hypr/scripts/quickshell/dynamic-island/README.md`](hypr/scripts/quickshell/dynamic-island/README.md)
@@ -74,13 +77,16 @@ builds `yay` from the AUR for later use, clones this repo to
 `~/aether-dotfiles`, and runs `install.sh`. Safe to re-run — every step is
 `--needed`/idempotent.
 
-`quickshell-git` comes from [Chaotic-AUR](https://aur.chaotic.cx/) — a
-community mirror that serves popular AUR packages as prebuilt binaries — so
-it's a plain `pacman -S`, not a local compile. Its Qt6 build is heavy
-enough to eat all available RAM+swap and lock up the whole machine while
-compiling directly, which is a much worse failure mode than "the repo
-add takes a few extra seconds." If Chaotic-AUR is unreachable for
-whatever reason, it falls back to building locally through `yay`.
+`quickshell-git` itself is built inside a memory-capped Docker container
+rather than directly on the host — its Qt6 compile is heavy enough to eat
+all available RAM+swap and lock up the whole machine while it does, not
+just fail. (Chaotic-AUR doesn't carry it — the AUR only has the `-git`
+package, no plain "quickshell", and Chaotic-AUR doesn't build that one —
+so there's no prebuilt-binary shortcut here.) Capped inside a container
+(default 6G, override with `DOCKER_BUILD_MEM=8g`), a build that outgrows
+the cap fails cleanly inside that container instead; the host never
+notices. The result is a real `.pkg.tar.zst`, installed on the host with
+`pacman -U` once the container build finishes.
 
 ### Already have the packages, just want the configs
 
