@@ -3,17 +3,19 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/lunanoir21/aether-dotfiles/main/bootstrap.sh | bash
 #
-# Installs Hyprland and everything this rice needs, builds an AUR helper for
-# later use (yay-bin — nothing here strictly needs it itself), clones this
-# repo, and runs install.sh to symlink the configs into place. Idempotent —
-# safe to run again on a box that already has some of this.
+# Installs Hyprland, Quickshell, and everything else this rice needs, builds
+# an AUR helper for later use (yay-bin — nothing here strictly needs it
+# itself), clones this repo, and runs install.sh to symlink the configs
+# into place. Idempotent — safe to run again on a box that already has some
+# of this.
 #
-# Does NOT install quickshell-git. It's AUR-only (no plain "quickshell", and
-# Chaotic-AUR doesn't carry the -git package either), and its Qt6 compile is
-# heavy enough to have locked up an 8G/16-core box outright the one time this
-# script tried to build it automatically — not something worth doing
-# unattended inside a one-liner. Install it yourself when ready:
-#   yay -S quickshell-git
+# Quickshell comes from Arch's own `extra` repo as a plain `pacman -S
+# quickshell` — no AUR, no compiling. (The `-git` AUR package is a
+# different, unattended-unfriendly story: its Qt6 build is heavy enough to
+# have locked up an 8G/16-core box outright the one time this script tried
+# building it automatically. If a bleeding-edge build is ever actually
+# needed, that's a manual `yay -S quickshell-git`, not something this
+# script does for you.)
 set -euo pipefail
 
 log() { printf '\n\033[1;32m==>\033[0m %s\n' "$1"; }
@@ -40,7 +42,7 @@ command -v sudo >/dev/null 2>&1 || die "sudo not found — install it first (as 
 log "Installing packages from the official repos"
 sudo pacman -Syu --needed --noconfirm \
     git base-devel cmake \
-    hyprland hypridle xdg-desktop-portal-hyprland \
+    hyprland hypridle xdg-desktop-portal-hyprland quickshell \
     kitty fish \
     cava playerctl wireplumber pipewire pipewire-pulse \
     wl-clipboard grim slurp jq brightnessctl \
@@ -56,9 +58,9 @@ sudo pacman -Syu --needed --noconfirm \
 # and enables hyprexpo the first time a real session actually starts.
 
 # ------------------------------------------------------------- AUR helper
-# Nothing in this script needs an AUR helper itself, but the user will want
-# one eventually on a fresh Arch box (quickshell-git included — see the top
-# of this file), so bootstrap yay-bin now while it's cheap: it ships
+# Nothing in this script needs an AUR helper itself (Quickshell comes from
+# the official repos now), but the user will want one eventually on a
+# fresh Arch box, so bootstrap yay-bin now while it's cheap: it ships
 # prebuilt, so this is a git clone and a package install, not a compile.
 if ! command -v yay >/dev/null 2>&1 && ! command -v paru >/dev/null 2>&1; then
     log "No AUR helper found — installing yay-bin"
@@ -83,6 +85,5 @@ log "Symlinking configs into ~/.config"
 "$DOTFILES_DIR/install.sh"
 
 log "Done"
-echo "Install quickshell-git yourself when ready: yay -S quickshell-git"
 echo "Log out and pick Hyprland at your display manager, or start it from a"
 echo "TTY with: Hyprland"

@@ -46,8 +46,7 @@ aether-dotfiles/
 Hyprland itself, plus whatever each piece needs:
 
 - **Quickshell** (`quickshell` / `qs`) — runs the Dynamic Island submodule.
-  Not installed by `bootstrap.sh` (see [Install](#install) below) — grab it
-  yourself with `yay -S quickshell-git` once everything else is set up.
+  In Arch's own `extra` repo (`pacman -S quickshell`), no AUR needed.
 - **cava**, **playerctl**, **wpctl** (PipeWire), **brightnessctl** — media/volume/
   brightness, used by Dynamic Island.
 - **grim**, **slurp**, **wl-copy** (wl-clipboard) — screenshots and clipboard.
@@ -76,20 +75,15 @@ wget -qO- https://raw.githubusercontent.com/lunanoir21/aether-dotfiles/main/boot
 
 `bootstrap.sh` checks `/etc/os-release` and refuses to run on anything that
 isn't Arch (or Arch-based) rather than half-installing and leaving a mess.
-On Arch it installs Hyprland and every package this rice needs via pacman,
-builds `yay` from the AUR for later use, clones this repo to
-`~/aether-dotfiles`, and runs `install.sh`. Safe to re-run — every step is
-`--needed`/idempotent.
+On Arch it installs Hyprland, Quickshell, and every other package this
+rice needs via pacman (all from the official repos — no compiling), builds
+`yay` from the AUR for later use, clones this repo to `~/aether-dotfiles`,
+and runs `install.sh`. Safe to re-run — every step is `--needed`/idempotent.
 
-It does **not** install `quickshell-git` — no plain "quickshell" package
-exists to grab prebuilt (AUR only has the `-git` package, and Chaotic-AUR
-doesn't carry that one either), and its Qt6 compile is heavy enough to
-lock up an 8G/16-core box outright when built unattended. Install it
-yourself once the box is otherwise set up:
-
-```bash
-yay -S quickshell-git
-```
+If a bleeding-edge build is ever actually needed instead of the stable
+`extra` package, that's a manual `yay -S quickshell-git` — its Qt6 compile
+is heavy enough to lock up an 8G/16-core box outright when built
+unattended, so not something this script does for you.
 
 ### Already have the packages, just want the configs
 
