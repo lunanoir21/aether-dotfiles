@@ -1,0 +1,22 @@
+# Runtime/cache state, not configuration — regenerated on first run.
+*.log
+*.qslog
+*.pid
+*.cache
+__pycache__/
+*.pyc
+
+# fish's own runtime state (universal variables, per-machine paths) —
+# regenerates itself; committing it would ship one machine's history to
+# everyone who clones this.
+fish_variables
+
+# Editor / OS noise
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/
+*.bak
+*.save
+*.save.*

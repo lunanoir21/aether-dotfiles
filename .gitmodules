@@ -1,0 +1,3 @@
+[submodule "hypr/scripts/quickshell/dynamic-island"]
+	path = hypr/scripts/quickshell/dynamic-island
+	url = https://github.com/lunanoir21/quickshell-dynamic-island.git
