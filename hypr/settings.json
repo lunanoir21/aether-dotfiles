@@ -299,7 +299,7 @@
       "command": "hypridle"
     },
     {
-      "command": "quickshell -p ~/.config/hypr/scripts/quickshell/Shell.qml"
+      "command": "quickshell -p ~/.config/hypr/scripts/quickshell/Main.qml"
     },
     {
       "command": "~/.config/hypr/scripts/init.sh"
