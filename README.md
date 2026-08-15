@@ -7,9 +7,10 @@ other widget/panel is intentionally not here yet: it's being redesigned,
 not migrated. Structured to mirror `~/.config` directly, so nothing here
 needs translating to figure out where it actually lives.
 
-SUPER+TAB opens an all-workspaces overview (the [hyprexpo](https://github.com/hyprwm/hyprland-plugins)
-plugin, bootstrapped automatically); bare SUPER still opens/closes Dynamic
-Island.
+SUPER+TAB opens an all-workspaces overview (the [hyprexpo](https://github.com/sandwichfarm/hyprexpo)
+plugin — retired from the official hyprwm/hyprland-plugins repo, this is
+the community fork that kept it going — bootstrapped automatically); bare
+SUPER still opens/closes Dynamic Island.
 
 ## What's in it
 

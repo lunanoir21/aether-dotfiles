@@ -33,7 +33,10 @@ mkdir -p "$(dirname "$LOG")"
     done
 
     if ! hyprpm list 2>/dev/null | grep -q hyprexpo; then
-        hyprpm add https://github.com/hyprwm/hyprland-plugins && hyprpm enable hyprexpo
+        # Retired from the official hyprwm/hyprland-plugins repo — this is
+        # the community fork that kept it going, same dispatcher name
+        # (hyprexpo:expo) and config keys, just a different source repo.
+        hyprpm add https://github.com/sandwichfarm/hyprexpo && hyprpm enable hyprexpo
     fi
     hyprpm update
     hyprpm reload -n
